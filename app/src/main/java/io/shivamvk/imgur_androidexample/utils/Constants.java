@@ -1,4 +1,4 @@
-package io.shivamvk.imgur_androidexample;
+package io.shivamvk.imgur_androidexample.utils;
 
 public class Constants{
 
