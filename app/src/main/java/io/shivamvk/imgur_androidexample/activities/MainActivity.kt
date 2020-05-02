@@ -2,6 +2,7 @@ package io.shivamvk.imgur_androidexample.activities
 
 import androidx.appcompat.app.AppCompatActivity
 import android.os.Bundle
+import android.util.DisplayMetrics
 import android.util.Log
 import android.widget.Adapter
 import android.widget.Toast
@@ -50,8 +51,15 @@ class MainActivity : AppCompatActivity() {
                         call: Call<ResponseModel>,
                         response: Response<ResponseModel>
                     ) {
-                        Log.i("api: Size of list", response.body()!!.data.size.toString())
-                        rvMainImagesAdapter = RvMainImagesAdapter(response.body()!!.data)
+                        Log.i("api: ", "Response received")
+                        var displayMetrics = DisplayMetrics()
+                        windowManager.defaultDisplay.getMetrics(displayMetrics)
+                        rvMainImagesAdapter = RvMainImagesAdapter(
+                            applicationContext,
+                            supportFragmentManager,
+                            response.body()!!.data,
+                            displayMetrics.widthPixels,
+                            displayMetrics.heightPixels)
                         rvMainImages.adapter = rvMainImagesAdapter
                     }
                 })
