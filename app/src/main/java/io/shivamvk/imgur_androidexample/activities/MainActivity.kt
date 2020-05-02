@@ -5,6 +5,7 @@ import androidx.appcompat.app.AppCompatActivity
 import android.os.Bundle
 import android.util.DisplayMetrics
 import android.util.Log
+import android.view.View
 import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
 import io.shivamvk.imgur_androidexample.network.ApiFactory
@@ -61,6 +62,7 @@ class MainActivity : AppCompatActivity() {
                         Log.i("api: ", "Response received")
                         var displayMetrics = DisplayMetrics()
                         windowManager.defaultDisplay.getMetrics(displayMetrics)
+                        binding.pbMain.visibility = View.GONE
                         rvMainImagesAdapter = RvMainImagesAdapter(
                             applicationContext,
                             supportFragmentManager,

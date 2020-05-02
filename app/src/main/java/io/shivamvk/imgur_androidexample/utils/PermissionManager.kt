@@ -18,7 +18,7 @@ class PermissionManager {
                 ActivityCompat.requestPermissions(
                     activity,
                     arrayOf(permission),
-                    100
+                    Permissions().cameraPermissionCode
                 )
                 return
             }
@@ -26,7 +26,7 @@ class PermissionManager {
                 ActivityCompat.requestPermissions(
                     activity,
                     arrayOf(permission),
-                    101
+                    Permissions().writeExternalStoragePermissionCode
                 )
                 return
             }

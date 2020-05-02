@@ -1,13 +1,18 @@
 package io.shivamvk.imgur_androidexample.activities
 
+import android.util.Base64.DEFAULT
+import android.util.Base64.encodeToString
 import android.app.Activity
+import android.app.Dialog
+import android.app.ProgressDialog
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.graphics.Bitmap
 import android.os.Bundle
 import android.provider.MediaStore
-import android.util.Base64.encodeToString
 import android.util.DisplayMetrics
+import android.util.Log
+import android.view.View
 import android.widget.ImageView
 import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
@@ -31,8 +36,9 @@ import javax.net.ssl.HttpsURLConnection
 class UploadImageActivity : AppCompatActivity() {
 
     private lateinit var binding: ActivityUploadImageBinding
-    private lateinit var mCurrentPhotoPath: String
     private val REQUEST_IMAGE_CAPTURE: Int = 200
+    private lateinit var imageBitmap: Bitmap
+    private lateinit var progressDialog: Dialog
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -42,6 +48,15 @@ class UploadImageActivity : AppCompatActivity() {
         setContentView(view)
         cameraPermission()
         takePicture()
+        setUpLoadingProgressBar()
+        binding.btUploadImage.setOnClickListener{
+            uploadImageToImgur(imageBitmap)
+        }
+    }
+
+    private fun setUpLoadingProgressBar(){
+        binding.pbUploadImage.visibility = View.GONE
+        binding.tvUploadImageUploadingText.visibility = View.INVISIBLE
     }
 
     private fun takePicture(){
@@ -52,7 +67,11 @@ class UploadImageActivity : AppCompatActivity() {
         }
     }
 
-    /*private fun uploadImageToImgur(image: Bitmap) {
+    private fun uploadImageToImgur(image: Bitmap) {
+        binding.ivUploadImage.visibility = View.GONE
+        binding.btUploadImage.visibility = View.GONE
+        binding.pbUploadImage.visibility = View.VISIBLE
+        binding.tvUploadImageUploadingText.visibility = View.VISIBLE
         getBase64Image(image, complete = { base64Image ->
             GlobalScope.launch(Dispatchers.Default) {
                 val url = URL("https://api.imgur.com/3/image")
@@ -71,6 +90,8 @@ class UploadImageActivity : AppCompatActivity() {
                 httpsURLConnection.doInput = true
                 httpsURLConnection.doOutput = true
 
+                Log.i("uploadImage:", "connection")
+
                 var body = ""
                 body += "--$boundary\r\n"
                 body += "Content-Disposition:form-data; name=\"image\""
@@ -87,8 +108,8 @@ class UploadImageActivity : AppCompatActivity() {
                     .use { it.readText() }  // defaults to UTF-8
                 val jsonObject = JSONTokener(response).nextValue() as JSONObject
                 val data = jsonObject.getJSONObject("data")
-                val imgurUrl: String = data.getString("link")
-
+                Log.i("uploadImage:", data.getString("link"))
+                finish()
             }
         })
     }
@@ -98,9 +119,9 @@ class UploadImageActivity : AppCompatActivity() {
             val outputStream = ByteArrayOutputStream()
             image.compress(Bitmap.CompressFormat.PNG, 100, outputStream)
             val b = outputStream.toByteArray()
-            complete(Base64.encodeToString(b, Base64.DEFAULT))
+            complete(android.util.Base64.encodeToString(b, android.util.Base64.DEFAULT))
         }
-    }*/
+    }
 
     override fun onActivityResult(
         requestCode: Int,
@@ -108,13 +129,9 @@ class UploadImageActivity : AppCompatActivity() {
         data: Intent?
     ) {
         if (requestCode == 200 && resultCode == Activity.RESULT_OK) {
-            val imageBitmap = data!!.extras!!.get("data") as Bitmap
-            setPicOnImageView(imageBitmap)
+            imageBitmap = data!!.extras!!.get("data") as Bitmap
+            setPicOnImageView()
         }
-    }
-
-    fun checkForPermissions(){
-        cameraPermission()
     }
 
     fun cameraPermission(){
@@ -129,7 +146,7 @@ class UploadImageActivity : AppCompatActivity() {
         grantResults: IntArray
     ) {
         when (requestCode) {
-            100 -> {
+            Permissions().cameraPermissionCode -> {
                 // If request is cancelled, the result arrays are empty.
                 if ((grantResults.isNotEmpty() && grantResults[0] == PackageManager.PERMISSION_GRANTED)) {
                     // permission was granted, yay!
@@ -140,14 +157,14 @@ class UploadImageActivity : AppCompatActivity() {
                 }
                 return
             }
-            101 -> {
+            Permissions().writeExternalStoragePermissionCode -> {
                 // If request is cancelled, the result arrays are empty.
                 if ((grantResults.isNotEmpty() && grantResults[0] == PackageManager.PERMISSION_GRANTED)) {
                     // permission was granted, yay!
                 } else {
                     // permission denied, boo!
                     Toast.makeText(applicationContext, "We need to access your camera to open it! ^_^", Toast.LENGTH_SHORT).show()
-                    PermissionManager().requestForPermission(this, Permissions().writeExternalStoragePermssion)
+                    PermissionManager().requestForPermission(this, Permissions().writeExternalStoragePermission)
                 }
                 return
             }
@@ -157,7 +174,7 @@ class UploadImageActivity : AppCompatActivity() {
         }
     }
 
-    private fun setPicOnImageView(imageBitmap: Bitmap){
+    private fun setPicOnImageView(){
         var displayMetrics = DisplayMetrics()
         windowManager.defaultDisplay.getMetrics(displayMetrics)
         binding.ivUploadImage.setImageBitmap(imageBitmap)
