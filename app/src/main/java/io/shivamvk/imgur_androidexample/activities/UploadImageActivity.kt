@@ -2,25 +2,37 @@ package io.shivamvk.imgur_androidexample.activities
 
 import android.app.Activity
 import android.content.Intent
-import android.graphics.BitmapFactory
-import android.net.Uri
+import android.content.pm.PackageManager
+import android.graphics.Bitmap
 import android.os.Bundle
-import android.os.Environment
 import android.provider.MediaStore
+import android.util.Base64.encodeToString
 import android.util.DisplayMetrics
-import android.util.Log
+import android.widget.ImageView
+import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
 import io.shivamvk.imgur_androidexample.databinding.ActivityUploadImageBinding
-import java.io.File
-import java.io.IOException
-import java.text.SimpleDateFormat
+import io.shivamvk.imgur_androidexample.utils.Constants
+import io.shivamvk.imgur_androidexample.utils.PermissionManager
+import io.shivamvk.imgur_androidexample.utils.Permissions
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.GlobalScope
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
+import org.json.JSONObject
+import org.json.JSONTokener
+import java.io.ByteArrayOutputStream
+import java.io.OutputStreamWriter
+import java.net.URL
 import java.util.*
+import javax.net.ssl.HttpsURLConnection
 
 
 class UploadImageActivity : AppCompatActivity() {
 
     private lateinit var binding: ActivityUploadImageBinding
     private lateinit var mCurrentPhotoPath: String
+    private val REQUEST_IMAGE_CAPTURE: Int = 200
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -28,80 +40,126 @@ class UploadImageActivity : AppCompatActivity() {
         binding = ActivityUploadImageBinding.inflate(layoutInflater)
         var view = binding.root
         setContentView(view)
-
-        captureImage()
+        cameraPermission()
+        takePicture()
     }
 
-    fun captureImage(){
-        val takePictureIntent = Intent(MediaStore.ACTION_IMAGE_CAPTURE)
-        if (takePictureIntent.resolveActivity(packageManager) != null) {
-            // Create the File where the photo should go
-            var photoFile: File? = null
-            try {
-                photoFile = createImageFile()
-            } catch (ex: IOException) {
-                // Error occurred while creating the File
-                ex.printStackTrace()
-            }
-            // Continue only if the File was successfully created
-            if (photoFile != null) {
-                takePictureIntent.putExtra(
-                    MediaStore.EXTRA_OUTPUT,
-                    Uri.fromFile(photoFile)
-                )
-                startActivityForResult(takePictureIntent, 100)
+    private fun takePicture(){
+        Intent(MediaStore.ACTION_IMAGE_CAPTURE).also { takePictureIntent ->
+            takePictureIntent.resolveActivity(packageManager)?.also {
+                startActivityForResult(takePictureIntent, REQUEST_IMAGE_CAPTURE)
             }
         }
     }
+
+    /*private fun uploadImageToImgur(image: Bitmap) {
+        getBase64Image(image, complete = { base64Image ->
+            GlobalScope.launch(Dispatchers.Default) {
+                val url = URL("https://api.imgur.com/3/image")
+
+                val boundary = "Boundary-${System.currentTimeMillis()}"
+
+                val httpsURLConnection =
+                    withContext(Dispatchers.IO) { url.openConnection() as HttpsURLConnection }
+                httpsURLConnection.setRequestProperty("Authorization", "Client-ID " + Constants.client_id)
+                httpsURLConnection.setRequestProperty(
+                    "Content-Type",
+                    "multipart/form-data; boundary=$boundary"
+                )
+
+                httpsURLConnection.requestMethod = "POST"
+                httpsURLConnection.doInput = true
+                httpsURLConnection.doOutput = true
+
+                var body = ""
+                body += "--$boundary\r\n"
+                body += "Content-Disposition:form-data; name=\"image\""
+                body += "\r\n\r\n$base64Image\r\n"
+                body += "--$boundary--\r\n"
+
+
+                val outputStreamWriter = OutputStreamWriter(httpsURLConnection.outputStream)
+                withContext(Dispatchers.IO) {
+                    outputStreamWriter.write(body)
+                    outputStreamWriter.flush()
+                }
+                val response = httpsURLConnection.inputStream.bufferedReader()
+                    .use { it.readText() }  // defaults to UTF-8
+                val jsonObject = JSONTokener(response).nextValue() as JSONObject
+                val data = jsonObject.getJSONObject("data")
+                val imgurUrl: String = data.getString("link")
+
+            }
+        })
+    }
+
+    private fun getBase64Image(image: Bitmap, complete: (String) -> Unit) {
+        GlobalScope.launch {
+            val outputStream = ByteArrayOutputStream()
+            image.compress(Bitmap.CompressFormat.PNG, 100, outputStream)
+            val b = outputStream.toByteArray()
+            complete(Base64.encodeToString(b, Base64.DEFAULT))
+        }
+    }*/
 
     override fun onActivityResult(
         requestCode: Int,
         resultCode: Int,
         data: Intent?
     ) {
-        if (requestCode == 100 && resultCode == Activity.RESULT_OK) {
-            setPic()
+        if (requestCode == 200 && resultCode == Activity.RESULT_OK) {
+            val imageBitmap = data!!.extras!!.get("data") as Bitmap
+            setPicOnImageView(imageBitmap)
         }
     }
 
-    private fun setPic() {
-        var displayMetrics = DisplayMetrics()
-        windowManager.defaultDisplay.getMetrics(displayMetrics)
-
-        // Get the dimensions of the bitmap
-        val bmOptions = BitmapFactory.Options()
-        bmOptions.inJustDecodeBounds = true
-        BitmapFactory.decodeFile(mCurrentPhotoPath, bmOptions)
-        val photoW = bmOptions.outWidth
-        val photoH = bmOptions.outHeight
-
-        // Determine how much to scale down the image
-        val scaleFactor = Math.min(photoW / displayMetrics.widthPixels, photoH / displayMetrics.heightPixels)
-
-        // Decode the image file into a Bitmap sized to fill the View
-        bmOptions.inJustDecodeBounds = false
-        bmOptions.inSampleSize = scaleFactor
-        bmOptions.inPurgeable = true
-        val bitmap = BitmapFactory.decodeFile(mCurrentPhotoPath, bmOptions)
-        binding.ivUploadImage.setImageBitmap(bitmap)
+    fun checkForPermissions(){
+        cameraPermission()
     }
 
-    @Throws(IOException::class)
-    private fun createImageFile(): File? {
-        // Create an image file name
-        val timeStamp: String = SimpleDateFormat("yyyyMMdd_HHmmss").format(Date())
-        val imageFileName = "JPEG_" + timeStamp + "_"
-        val storageDir: File = Environment.getExternalStoragePublicDirectory(
-            Environment.DIRECTORY_PICTURES
-        )
-        val image = File.createTempFile(
-            imageFileName,  /* prefix */
-            ".jpg",  /* suffix */
-            storageDir /* directory */
-        )
-        // Save a file: path for use with ACTION_VIEW intents
-        mCurrentPhotoPath = image.absolutePath
-        Log.e("Getpath", "Cool$mCurrentPhotoPath")
-        return image
+    fun cameraPermission(){
+        if(!PermissionManager().checkForPermission(applicationContext, Permissions().cameraPermission)){
+            PermissionManager().requestForPermission(this, Permissions().cameraPermission)
+        }
+    }
+
+    override fun onRequestPermissionsResult(
+        requestCode: Int,
+        permissions: Array<out String>,
+        grantResults: IntArray
+    ) {
+        when (requestCode) {
+            100 -> {
+                // If request is cancelled, the result arrays are empty.
+                if ((grantResults.isNotEmpty() && grantResults[0] == PackageManager.PERMISSION_GRANTED)) {
+                    // permission was granted, yay!
+                } else {
+                    // permission denied, boo!
+                    Toast.makeText(applicationContext, "We need to access your camera to open it! ^_^", Toast.LENGTH_SHORT).show()
+                    PermissionManager().requestForPermission(this, Permissions().cameraPermission)
+                }
+                return
+            }
+            101 -> {
+                // If request is cancelled, the result arrays are empty.
+                if ((grantResults.isNotEmpty() && grantResults[0] == PackageManager.PERMISSION_GRANTED)) {
+                    // permission was granted, yay!
+                } else {
+                    // permission denied, boo!
+                    Toast.makeText(applicationContext, "We need to access your camera to open it! ^_^", Toast.LENGTH_SHORT).show()
+                    PermissionManager().requestForPermission(this, Permissions().writeExternalStoragePermssion)
+                }
+                return
+            }
+            else -> {
+                // Ignore all other requests.
+            }
+        }
+    }
+
+    private fun setPicOnImageView(imageBitmap: Bitmap){
+        var displayMetrics = DisplayMetrics()
+        windowManager.defaultDisplay.getMetrics(displayMetrics)
+        binding.ivUploadImage.setImageBitmap(imageBitmap)
     }
 }
